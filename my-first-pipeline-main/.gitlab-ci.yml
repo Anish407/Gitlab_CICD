@@ -1,0 +1,100 @@
+stages:
+  - build
+  - systest_deploy
+  - preprod_deploy
+include:
+  - project: 'learngitlab3324139/shared_templates'
+    file: '/rules/ci_rules.yml'
+    ref: main
+    
+# Build stage: always runs
+build-job:
+  stage: build
+  script:
+    - echo "Build stage running"
+  when: always
+
+# Systest database: manual, fail stops dependent jobs
+systest_database-job:
+  extends: .manual_no_failure
+  stage: systest_deploy
+  script:
+    - echo "Running database scripts"; exit 1
+  needs:
+    - build-job
+
+# Systest push API1: auto on success, manual otherwise
+systest_push_api1_to_ECR:
+  stage: systest_deploy
+  extends: .automatic_no_failure
+  script:
+    - echo "systest push to ecr"
+  needs:
+    - ["build-job", "systest_database-job"]
+
+systest_deploy_api1_ecr:
+  stage: systest_deploy
+  extends: .automatic_no_failure
+  script:
+    - echo "Deploy image to ECR"
+  needs:
+    - ["systest_push_api1_to_ECR"]
+
+systest_push_api2_ecr:
+  stage: systest_deploy
+  extends: .automatic_no_failure
+  script:
+    - echo "push api2 to ecr"
+  needs:
+    - ["build-job", "systest_database-job"]
+
+systest_deploy_api2_ecr:
+  stage: systest_deploy
+  extends: .automatic_no_failure
+  script:
+    - echo "Push image to ECR"
+  needs:
+    - ["systest_push_api2_ecr"]
+
+# Preprod database job
+preprod_database-job:
+  extends: .manual_no_failure
+  stage: preprod_deploy
+  script:
+    - echo "Running database scripts"
+  needs:
+    - build-job
+
+preprod_push_api1_to_ECR:
+  stage: preprod_deploy
+  extends: .automatic_no_failure
+  script:
+    - echo "systest push to ecr"
+  needs:
+    - ["systest_deploy_api1_ecr", "preprod_database-job"]
+
+preprod_deploy_api1_ecr:
+  stage: preprod_deploy
+  extends: .automatic_no_failure
+  script:
+    - echo "Deploy image to ECR"
+  needs:
+    - ["preprod_push_api1_to_ECR"]
+
+preprod_push_api2_ecr:
+  stage: preprod_deploy
+  extends: .automatic_no_failure
+  script:
+    - echo "push api2 to ecr"
+  needs:
+    - ["systest_push_api2_ecr", "preprod_database-job"]
+
+preprod_deploy_api2_ecr:
+  stage: preprod_deploy
+  extends: .automatic_no_failure
+  script:
+    - echo "Push image to ECR"
+  needs:
+    - ["preprod_push_api2_ecr"]
+
+
